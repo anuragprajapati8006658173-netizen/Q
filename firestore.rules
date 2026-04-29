@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidHistory(data) {
+      return data.text is string && data.text.size() <= 2000 &&
+             data.emotion is string && data.emotion.size() <= 50 &&
+             data.voiceName is string && data.voiceName.size() <= 50 &&
+             data.audioData is string && data.audioData.size() <= 2000000 && // ~1.5MB max audio
+             data.userId == request.auth.uid &&
+             data.createdAt == request.time;
+    }
+
+    match /history/{genId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidHistory(request.resource.data);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
